@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "libphonenumber",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/alex1704/LibPhoneNumber",
+      "state" : {
+        "revision" : "038e232364f8c3ba07e3e6de28b6ce16f2ab6cfd",
+        "version" : "1.0.0"
+      }
+    }
+  ],
+  "version" : 2
+}
