@@ -3,7 +3,18 @@ import XCTest
 
 final class PhoneNumberInputViewTests: XCTestCase {
 
-    func testExample() throws {
-        XCTAssert(true)
+    func testModelStateUpdate() throws {
+        // given
+        var model = PhoneNumberInputView.Model()
+
+        // when
+        model.raw = "+38063"
+
+        // then
+        for index in (0...7) {
+            model.raw += "1"
+            model.updateState(formattedRaw: model.getFormattedRawValue())
+            XCTAssert(index == 6 ? model.isValid : !model.isValid)
+        }
     }
 }

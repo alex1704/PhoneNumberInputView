@@ -27,7 +27,7 @@ public struct PhoneNumberInputView: UIViewRepresentable {
     }
 
     public func updateUIView(_ uiView: UITextField, context: Context) {
-        context.coordinator.update(textField: uiView, rawPhone: model.raw)
+        context.coordinator.update(textField: uiView)
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -68,6 +68,10 @@ extension PhoneNumberInputView {
                 .map(String.init)
                 .joined()
         }
+
+        // MARK: - Private
+
+        private var libphoneNumber = LibPhoneNumber()
     }
 }
 
@@ -86,17 +90,16 @@ extension PhoneNumberInputView {
             textField.delegate = self
         }
 
-        public func update(textField: UITextField, rawPhone: String) {
+        public func update(textField: UITextField) {
             // prevent SwiftUI warnings
             DispatchQueue.main.async { [weak self] in
-                self?.doUpdate(textField: textField, rawPhone: rawPhone)
+                self?.doUpdate(textField: textField)
             }
         }
 
         // MARK: - Private
 
         private var isDeleting = false
-        private let libphoneNumber = LibPhoneNumber()
         private let viewRepresentable: PhoneNumberInputView
     }
 }
@@ -145,43 +148,71 @@ extension PhoneNumberInputView.Coordinator {
         // next func View Representable updateUIView(_ uiView:, context:) will be called
     }
 
-    ///Formats `rawPhone` with `AsYouTypeFormatter` and assigns result to `textField.text`. Additionally
-    ///extract additional properties for `viewRepresentable.model`.
+    ///Formats `PhoneNumberInputView.Model.raw` with AsYouTypeFormatter and assign result to `textField.text`.
+    /// Updates `PhoneNumberInputView.Model` properteis based on format results
     ///
-    /// Extract `region` and assign it to `viewRepresentable.model.region`.
-    ///
-    /// Check if phone is valid and assign value to `viewRepresentable.model.isValid`.
-    ///
-    /// If error is thrown assign localized description to`viewRepresentable.model.error`.
     /// - Parameters:
     ///   - textField: text field to show formatted value
-    ///   - rawPhone: raw phone value, ex. +380631112233
-    private func doUpdate(textField: UITextField, rawPhone: String) {
+    private func doUpdate(textField: UITextField) {
+        let formattedRaw = viewRepresentable.model.getFormattedRawValue()
+        textField.text = formattedRaw
+        viewRepresentable.model.updateState(formattedRaw: formattedRaw)
+    }
+}
+
+extension PhoneNumberInputView.Model {
+    /// Produces formatted string from `raw` property with AsYouTypeFormatter.
+    ///
+    /// Iif exception is thrown then `region` = "", `isValid` = false, `error` =  exception localized description
+    mutating func getFormattedRawValue() -> String? {
         do {
-            guard let formatted = try libphoneNumber?.formatWithAsYouTypeFormatterPhoneNumber(rawPhone) else {
-                viewRepresentable.model.region = ""
-                viewRepresentable.model.isValid = false
-                return
-            }
-
-            textField.text = formatted
-
-            guard let region = try libphoneNumber?.regionCodeForPhoneNumber(formatted) else {
-                viewRepresentable.model.region = ""
-                viewRepresentable.model.isValid = false
-                return
-            }
-
-            viewRepresentable.model.region = region
-
-            guard let isValid = try libphoneNumber?.isValidPhoneNumber(formatted) else {
-                viewRepresentable.model.isValid = false
-                return
-            }
-
-            viewRepresentable.model.isValid = isValid
+            return try libphoneNumber?.formatWithAsYouTypeFormatterPhoneNumber(raw)
         } catch {
-            viewRepresentable.model.error = error.localizedDescription
+            region = ""
+            isValid = false
+            self.error = error.localizedDescription
+        }
+
+        return nil
+    }
+
+    /// Updates `region` and `isValid` properties depending on `formattedRaw` value
+    ///
+    /// On 1st stage: ensure `formattedRaw` is not nil otherwise `region` = "", `isValid` = false;
+    ///
+    /// On 2nd stage: if it is possible to extract regionCode from `formattedRaw` then `region` is set to extracted code
+    /// and continue to stage 3. Otherwise `region` = "", `isValid` = false;
+    ///
+    /// On 3rd stage: `formattedRaw` checked if it is valid phone and results is assigned to `isValid` property. If validation
+    /// fails then `isValid` = false;
+    ///
+    /// If exception is thrown on 2nd or 3rd phases then `region` = "", `isValid` = false, `error` =  exception localized description
+    mutating func updateState(formattedRaw: String?) {
+        do {
+            guard let formattedRaw else {
+                region = ""
+                isValid = false
+                return
+            }
+
+            guard let updatedRegion = try libphoneNumber?.regionCodeForPhoneNumber(formattedRaw) else {
+                region = ""
+                isValid = false
+                return
+            }
+
+            region = updatedRegion
+
+            guard let isValidUpdate = try libphoneNumber?.isValidPhoneNumber(formattedRaw) else {
+                isValid = false
+                return
+            }
+
+            isValid = isValidUpdate
+        } catch {
+            region = ""
+            isValid = false
+            self.error = error.localizedDescription
         }
     }
 }
